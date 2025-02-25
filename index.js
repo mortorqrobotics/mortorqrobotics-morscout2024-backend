@@ -3,6 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 const routes = require('./routes');
+const admin = require("firebase-admin");
 
 const app = express();
 
@@ -13,6 +14,23 @@ app.use(express.json());
 
 // Routes
 app.use('/api', routes);
+
+// Add this route to check configuration
+app.get('/api/config-test', (req, res) => {
+    try {
+        res.json({
+            environment: process.env.NODE_ENV,
+            hasFirebaseConfig: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+            firebaseInitialized: !!admin.apps.length,
+            message: 'Configuration check endpoint'
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
 
 // Basic test route
 app.get('/test', (req, res) => {
