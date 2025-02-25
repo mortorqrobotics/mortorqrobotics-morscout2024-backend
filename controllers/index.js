@@ -1,6 +1,7 @@
 const { Parser } = require("json2csv");
 const fs = require("fs").promises;
 const db = require("../firebase");
+const { getMatchScoutData } = require("./utils");
 
 
 const submitMatchScoutForm = async (req, res) => {
