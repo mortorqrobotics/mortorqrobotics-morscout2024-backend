@@ -244,64 +244,79 @@ const convertMatchScoutToCSV = async (req, res) => {
     const snapshot = await db.collection("matchscout").get();
     const records = [];
 
-    for (const doc of snapshot.docs) {
+    snapshot.forEach((doc) => {
       const teamNumber = doc.id;
       const teamData = doc.data();
 
+      // Iterate through match data
       Object.entries(teamData).forEach(([matchKey, matchData]) => {
-        Object.entries(matchData).forEach(([username, scoutData]) => {
+        if (matchKey.startsWith('match')) {
+          const matchNumber = matchKey.replace('match', '');
+          
+          // Get the first (and only) username key
+          const username = Object.keys(matchData)[0];
+          const scoutData = matchData[username];
+
+          // Create record with all fields
           records.push({
             teamNumber,
-            matchNumber: matchKey.replace("match", ""),
+            matchNumber,
             username,
-            ...scoutData
+            submissionTimestamp: scoutData.submissionTimestamp || '',
+            // Auto
+            autoL1Scores: scoutData.autoL1Scores || 0,
+            autoL2Scores: scoutData.autoL2Scores || 0,
+            autoL3Scores: scoutData.autoL3Scores || 0,
+            autoL4Scores: scoutData.autoL4Scores || 0,
+            autoL1Attempts: scoutData.autoL1Attempts || 0,
+            autoL2Attempts: scoutData.autoL2Attempts || 0,
+            autoL3Attempts: scoutData.autoL3Attempts || 0,
+            autoL4Attempts: scoutData.autoL4Attempts || 0,
+            autoProcessorAlgaeScores: scoutData.autoProcessorAlgaeScores || 0,
+            autoProcessorAlgaeAttempts: scoutData.autoProcessorAlgaeAttempts || 0,
+            autoNetAlgaeScores: scoutData.autoNetAlgaeScores || 0,
+            autoNetAlgaeAttempts: scoutData.autoNetAlgaeAttempts || 0,
+            leftStartingZone: scoutData.leftStartingZone || 'No',
+            // Teleop
+            teleopL1Scores: scoutData.teleopL1Scores || 0,
+            teleopL2Scores: scoutData.teleopL2Scores || 0,
+            teleopL3Scores: scoutData.teleopL3Scores || 0,
+            teleopL4Scores: scoutData.teleopL4Scores || 0,
+            teleopL1Attempts: scoutData.teleopL1Attempts || 0,
+            teleopL2Attempts: scoutData.teleopL2Attempts || 0,
+            teleopL3Attempts: scoutData.teleopL3Attempts || 0,
+            teleopL4Attempts: scoutData.teleopL4Attempts || 0,
+            teleopProcessorAlgaeScores: scoutData.teleopProcessorAlgaeScores || 0,
+            teleopProcessorAlgaeAttempts: scoutData.teleopProcessorAlgaeAttempts || 0,
+            teleopNetAlgaeScores: scoutData.teleopNetAlgaeScores || 0,
+            teleopNetAlgaeAttempts: scoutData.teleopNetAlgaeAttempts || 0,
+            // Endgame
+            climbLevel: scoutData.climbLevel || 'None',
+            climbSuccess: scoutData.climbSuccess || 'No',
+            climbAttemptTime: scoutData.climbAttemptTime || 'None',
+            // Comments
+            climbComments: scoutData.climbComments || '',
+            robotSpeed: scoutData.robotSpeed || 'None',
+            generalComments: scoutData.generalComments || ''
           });
-        });
+        }
       });
-    }
+    });
 
     if (records.length === 0) {
       return res.status(404).json({ error: "No scouting data found" });
     }
 
-    const fields = [
-      "teamNumber",
-      "matchNumber",
-      "username",
-      "submissionTimestamp",
-      // Auto
-      "autoL1Scores", "autoL2Scores", "autoL3Scores", "autoL4Scores",
-      "autoL1Attempts", "autoL2Attempts", "autoL3Attempts", "autoL4Attempts",
-      "autoProcessorAlgaeScores", "autoProcessorAlgaeAttempts",
-      "autoNetAlgaeScores", "autoNetAlgaeAttempts",
-      "leftStartingZone",
-      // Teleop
-      "teleopL1Scores", "teleopL2Scores", "teleopL3Scores", "teleopL4Scores",
-      "teleopL1Attempts", "teleopL2Attempts", "teleopL3Attempts", "teleopL4Attempts",
-      "teleopProcessorAlgaeScores", "teleopProcessorAlgaeAttempts",
-      "teleopNetAlgaeScores", "teleopNetAlgaeAttempts",
-      // Endgame
-      "climbLevel", "climbSuccess", "climbAttemptTime",
-      // Comments
-      "climbComments", "robotSpeed", "generalComments"
-    ];
-
-    const json2csvParser = new Parser({
-      fields,
-      defaultValue: "0"
-    });
-
+    const json2csvParser = new Parser();
     const csv = json2csvParser.parse(records);
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `matchscout_${timestamp}.csv`;
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-    res.send(csv);
+    res.setHeader('Content-Disposition', 'attachment; filename=matchscout_data.csv');
+    res.status(200).send(csv);
 
   } catch (error) {
     console.error("Error converting to CSV:", error);
-    res.status(500).json({ error: "Failed to convert data to CSV" });
+    res.status(500).json({ error: "Failed to convert data to CSV", details: error.message });
   }
 };
 
