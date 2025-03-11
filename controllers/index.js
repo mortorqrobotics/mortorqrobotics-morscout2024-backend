@@ -254,45 +254,7 @@ const convertMatchScoutToCSV = async (req, res) => {
             teamNumber,
             matchNumber: matchKey.replace("match", ""),
             username,
-            // Auto
-            autoL1Scores: scoutData.autoL1Scores || 0,
-            autoL2Scores: scoutData.autoL2Scores || 0,
-            autoL3Scores: scoutData.autoL3Scores || 0,
-            autoL4Scores: scoutData.autoL4Scores || 0,
-            autoL1Attempts: scoutData.autoL1Attempts || 0,
-            autoL2Attempts: scoutData.autoL2Attempts || 0,
-            autoL3Attempts: scoutData.autoL3Attempts || 0,
-            autoL4Attempts: scoutData.autoL4Attempts || 0,
-            autoProcessorAlgaeScores: scoutData.autoProcessorAlgaeScores || 0,
-            autoProcessorAlgaeAttempts:
-              scoutData.autoProcessorAlgaeAttempts || 0,
-            autoNetAlgaeScores: scoutData.autoNetAlgaeScores || 0,
-            autoNetAlgaeAttempts: scoutData.autoNetAlgaeAttempts || 0,
-            leftStartingZone: scoutData.leftStartingZone || "No",
-            // Teleop
-            teleopL1Scores: scoutData.teleopL1Scores || 0,
-            teleopL2Scores: scoutData.teleopL2Scores || 0,
-            teleopL3Scores: scoutData.teleopL3Scores || 0,
-            teleopL4Scores: scoutData.teleopL4Scores || 0,
-            teleopL1Attempts: scoutData.teleopL1Attempts || 0,
-            teleopL2Attempts: scoutData.teleopL2Attempts || 0,
-            teleopL3Attempts: scoutData.teleopL3Attempts || 0,
-            teleopL4Attempts: scoutData.teleopL4Attempts || 0,
-            teleopProcessorAlgaeScores:
-              scoutData.teleopProcessorAlgaeScores || 0,
-            teleopProcessorAlgaeAttempts:
-              scoutData.teleopProcessorAlgaeAttempts || 0,
-            teleopNetAlgaeScores: scoutData.teleopNetAlgaeScores || 0,
-            teleopNetAlgaeAttempts: scoutData.teleopNetAlgaeAttempts || 0,
-            // Endgame
-            climbLevel: scoutData.climbLevel || "",
-            climbSuccess: scoutData.climbSuccess || "No",
-            climbAttemptTime: scoutData.climbAttemptTime || "",
-            // Ratings and Comments
-            robotSpeed: scoutData.robotSpeed || "",
-            defenseRating: scoutData.defenseRating || "No Defense",
-            climbComments: scoutData.climbComments || "",
-            generalComments: scoutData.generalComments || "",
+            ...scoutData
           });
         });
       });
@@ -302,64 +264,41 @@ const convertMatchScoutToCSV = async (req, res) => {
       return res.status(404).json({ error: "No scouting data found" });
     }
 
-    // Define fields in the exact order you want them in the CSV
     const fields = [
       "teamNumber",
       "matchNumber",
-      "autoL1Scores",
-      "autoL2Scores",
-      "autoL3Scores",
-      "autoL4Scores",
-      "autoL1Attempts",
-      "autoL2Attempts",
-      "autoL3Attempts",
-      "autoL4Attempts",
-      "autoProcessorAlgaeScores",
-      "autoProcessorAlgaeAttempts",
-      "autoNetAlgaeScores",
-      "autoNetAlgaeAttempts",
-      "leftStartingZone",
-      "teleopL1Scores",
-      "teleopL2Scores",
-      "teleopL3Scores",
-      "teleopL4Scores",
-      "teleopL1Attempts",
-      "teleopL2Attempts",
-      "teleopL3Attempts",
-      "teleopL4Attempts",
-      "teleopProcessorAlgaeScores",
-      "teleopProcessorAlgaeAttempts",
-      "teleopNetAlgaeScores",
-      "teleopNetAlgaeAttempts",
-      "climbLevel",
-      "climbSuccess",
-      "climbAttemptTime",
-      "climbComments",
-      "robotSpeed",
-      "defenseRating",
-      "generalComments",
       "username",
       "submissionTimestamp",
+      // Auto
+      "autoL1Scores", "autoL2Scores", "autoL3Scores", "autoL4Scores",
+      "autoL1Attempts", "autoL2Attempts", "autoL3Attempts", "autoL4Attempts",
+      "autoProcessorAlgaeScores", "autoProcessorAlgaeAttempts",
+      "autoNetAlgaeScores", "autoNetAlgaeAttempts",
+      "leftStartingZone",
+      // Teleop
+      "teleopL1Scores", "teleopL2Scores", "teleopL3Scores", "teleopL4Scores",
+      "teleopL1Attempts", "teleopL2Attempts", "teleopL3Attempts", "teleopL4Attempts",
+      "teleopProcessorAlgaeScores", "teleopProcessorAlgaeAttempts",
+      "teleopNetAlgaeScores", "teleopNetAlgaeAttempts",
+      // Endgame
+      "climbLevel", "climbSuccess", "climbAttemptTime",
+      // Comments
+      "climbComments", "robotSpeed", "generalComments"
     ];
 
     const json2csvParser = new Parser({
       fields,
-      defaultValue: "0",
+      defaultValue: "0"
     });
 
     const csv = json2csvParser.parse(records);
-
-    // Save CSV file
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `matchscout_${timestamp}.csv`;
-    const filePath = `./exports/${fileName}`;
 
-    await fs.mkdir("./exports", { recursive: true });
-    await fs.writeFile(filePath, csv);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.send(csv);
 
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
-    res.sendFile(filePath, { root: "." });
   } catch (error) {
     console.error("Error converting to CSV:", error);
     res.status(500).json({ error: "Failed to convert data to CSV" });
