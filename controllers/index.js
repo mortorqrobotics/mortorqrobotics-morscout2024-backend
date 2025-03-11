@@ -140,12 +140,45 @@ const toggleMatchButtonStatus = async (req, res) => {
 const fetchMatchScoutData = async (req, res) => {
   try {
     const matchScoutCollection = db.collection("matchscout");
-    const matchScoutDocuments = await matchScoutCollection.listDocuments();
-    const matchScoutData = await getMatchScoutData(matchScoutDocuments);
-    res.json(matchScoutData);
+    const snapshot = await matchScoutCollection.get();
+    const matchScoutData = [];
+
+    snapshot.forEach((doc) => {
+      const teamNumber = doc.id;
+      const teamData = doc.data();
+
+      Object.entries(teamData).forEach(([matchKey, matchData]) => {
+        if (matchKey.startsWith('match')) {
+          const matchNumber = matchKey.replace('match', '');
+          const username = Object.keys(matchData)[0];
+          const scoutData = matchData[username];
+          
+          matchScoutData.push({
+            teamNumber,
+            matchNumber,
+            username,
+            ...scoutData
+          });
+        }
+      });
+    });
+
+    // Sort by team number and match number
+    matchScoutData.sort((a, b) => {
+      if (a.teamNumber !== b.teamNumber) {
+        return a.teamNumber.localeCompare(b.teamNumber);
+      }
+      return parseInt(a.matchNumber) - parseInt(b.matchNumber);
+    });
+
+    res.status(200).json(matchScoutData);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
+    console.error("Error fetching match scout data:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: "Internal Server Error",
+      details: error.message 
+    });
   }
 };
 
