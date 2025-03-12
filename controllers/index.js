@@ -385,6 +385,118 @@ const fetchAllMatchScoutButtonStatuses = async (req, res) => {
   }
 };
 
+const convertPitScoutToCSV = async (req, res) => {
+  try {
+    const snapshot = await db.collection("pitscout").get();
+    const records = [];
+
+    snapshot.forEach((doc) => {
+      const teamNumber = doc.id;
+      const teamData = doc.data();
+
+      if (teamData.pitscout) {
+        Object.entries(teamData.pitscout).forEach(([submissionKey, submissionData]) => {
+          const username = Object.keys(submissionData)[0];
+          const scoutData = submissionData[username];
+
+          records.push({
+            teamNumber,
+            username,
+            submissionTimestamp: scoutData.submissionTimestamp || '',
+            // Robot Specifications
+            robotWeight: scoutData.robotWeight || '',
+            frameSize: scoutData.frameSize || '',
+            drivetrain: scoutData.drivetrain || '',
+            
+            // Auto Capabilities
+            auto: scoutData.auto || '',
+            scoringPositionAuto: scoutData.scoringPositionAuto || '',
+            autoNotesScored: scoutData.autoNotesScored || '',
+            
+            // Teleop Capabilities
+            scoringPosition: scoutData.scoringPosition || '',
+            estimatedCycleTime: scoutData.estimatedCycleTime || '',
+            pickupFromFloor: scoutData.pickupFromFloor || '',
+            
+            // Climb
+            climb: scoutData.climb || '',
+            climbTime: scoutData.climbTime || '',
+            
+            // Additional Info
+            additionalComments: scoutData.additionalComments || ''
+          });
+        });
+      }
+    });
+
+    if (records.length === 0) {
+      return res.status(404).json({ error: "No pit scout data found" });
+    }
+
+    const json2csvParser = new Parser();
+    const csv = json2csvParser.parse(records);
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=pitscout_data.csv');
+    res.status(200).send(csv);
+
+  } catch (error) {
+    console.error("Error converting to CSV:", error);
+    res.status(500).json({ error: "Failed to convert data to CSV", details: error.message });
+  }
+};
+
+const submitPitScoutForm = async (req, res) => {
+  try {
+    const { teamNumber } = req.params;
+    const { username, ...formFields } = req.body;
+
+    // Create PST timestamp
+    const pstTimestamp = new Date().toLocaleString("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+
+    const teamDocRef = db.collection("pitscout").doc(teamNumber);
+    const teamDoc = await teamDocRef.get();
+
+    // Add timestamp to form data
+    const formDataWithTimestamp = {
+      ...formFields,
+      submissionTimestamp: pstTimestamp,
+    };
+
+    if (teamDoc.exists) {
+      // Add new submission
+      await teamDocRef.update({
+        [`pitscout.submission${Date.now()}`]: {
+          [username]: formDataWithTimestamp,
+        },
+      });
+    } else {
+      // Create new document with first submission
+      const initialData = {
+        pitscout: {
+          [`submission${Date.now()}`]: {
+            [username]: formDataWithTimestamp,
+          },
+        },
+      };
+      await teamDocRef.set(initialData);
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error submitting pit scout:", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+};
 
 module.exports = {
     fetchAllMatchScoutButtonStatuses,
@@ -394,5 +506,6 @@ module.exports = {
     fetchMatchScoutData,
     fetchPitScoutData,
     fetchAllScoutInstances,
-    convertMatchScoutToCSV
+    convertMatchScoutToCSV,
+    submitPitScoutForm
 }

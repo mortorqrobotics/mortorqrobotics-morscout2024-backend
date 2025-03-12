@@ -7,6 +7,7 @@ const {
   fetchMatchButtonStatus,
   submitMatchScoutForm,
   toggleMatchButtonStatus,
+  submitPitScoutForm,
 } = require("../controllers");
 const { Router } = require("express")
 
@@ -27,5 +28,7 @@ router.get("/all-scout-instances", fetchAllScoutInstances);
 router.get("/matchscout/export/csv", convertMatchScoutToCSV);
 
 router.get("/matchscout/match/:matchNumber/status", fetchAllMatchScoutButtonStatuses);
+
+router.post("/submit-pitscout/:teamNumber", submitPitScoutForm);
 
 module.exports = router;
