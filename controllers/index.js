@@ -410,11 +410,24 @@ const convertPitScoutToCSV = async (req, res) => {
             
             // Auto Capabilities
             auto: scoutData.auto || '',
-            scoringPositionAuto: scoutData.scoringPositionAuto || '',
+            // Auto Scoring Positions
+            autoProcessor: scoutData.scoringPositions?.processor || false,
+            autoNet: scoutData.scoringPositions?.net || false,
+            autoL1: scoutData.scoringPositions?.l1 || false,
+            autoL2: scoutData.scoringPositions?.l2 || false,
+            autoL3: scoutData.scoringPositions?.l3 || false,
+            autoL4: scoutData.scoringPositions?.l4 || false,
             autoNotesScored: scoutData.autoNotesScored || '',
             
+            // Teleop Scoring Positions
+            teleopProcessor: scoutData.scoringPositionsTeleop?.processorTeleop || false,
+            teleopNet: scoutData.scoringPositionsTeleop?.netTeleop || false,
+            teleopL1: scoutData.scoringPositionsTeleop?.l1Teleop || false,
+            teleopL2: scoutData.scoringPositionsTeleop?.l2Teleop || false,
+            teleopL3: scoutData.scoringPositionsTeleop?.l3Teleop || false,
+            teleopL4: scoutData.scoringPositionsTeleop?.l4Teleop || false,
+            
             // Teleop Capabilities
-            scoringPosition: scoutData.scoringPosition || '',
             estimatedCycleTime: scoutData.estimatedCycleTime || '',
             pickupFromFloor: scoutData.pickupFromFloor || '',
             
@@ -433,7 +446,42 @@ const convertPitScoutToCSV = async (req, res) => {
       return res.status(404).json({ error: "No pit scout data found" });
     }
 
-    const json2csvParser = new Parser();
+    const json2csvParser = new Parser({
+      fields: [
+        'teamNumber',
+        'username',
+        'submissionTimestamp',
+        // Robot Specifications
+        'robotWeight',
+        'frameSize',
+        'drivetrain',
+        // Auto Capabilities
+        'auto',
+        'autoProcessor',
+        'autoNet',
+        'autoL1',
+        'autoL2',
+        'autoL3',
+        'autoL4',
+        'autoNotesScored',
+        // Teleop Scoring Positions
+        'teleopProcessor',
+        'teleopNet',
+        'teleopL1',
+        'teleopL2',
+        'teleopL3',
+        'teleopL4',
+        // Teleop Capabilities
+        'estimatedCycleTime',
+        'pickupFromFloor',
+        // Climb
+        'climb',
+        'climbTime',
+        // Additional Info
+        'additionalComments'
+      ]
+    });
+
     const csv = json2csvParser.parse(records);
 
     res.setHeader('Content-Type', 'text/csv');
