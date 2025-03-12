@@ -32,11 +32,6 @@ app.get('/api/config-test', (req, res) => {
     }
 });
 
-// Basic test route
-app.get('/test', (req, res) => {
-  res.json({ message: 'Backend is working!' });
-});
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

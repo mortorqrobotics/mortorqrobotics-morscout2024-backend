@@ -1,9 +1,18 @@
 const { Parser } = require("json2csv");
-const fs = require("fs").promises;
 const db = require("../firebase");
-const { getMatchScoutData } = require("./utils");
 
-
+/**
+ * Submits a match scouting form for a specific team
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - URL parameters
+ * @param {string} req.params.teamNumber - Team number to submit for
+ * @param {Object} req.body - Request body containing form data
+ * @param {string} req.body.username - Scout's username
+ * @param {string} req.body.matchNumber - Match number being scouted
+ * @returns {Object} Response object
+ * @returns {boolean} response.success - Whether submission was successful
+ * @returns {string?} response.error - Error message if submission failed
+ */
 const submitMatchScoutForm = async (req, res) => {
   try {
     const { teamNumber } = req.params;
@@ -52,91 +61,15 @@ const submitMatchScoutForm = async (req, res) => {
   }
 };
 
-const fetchMatchButtonStatus = async (req, res) => {
-  try {
-    const { teamNumber, matchNumber } = req.params;
-
-    const buttonRef = db
-      .collection("buttons")
-      .doc(teamNumber + "-" + matchNumber);
-    const buttonDoc = await buttonRef.get();
-
-    if (!buttonDoc.exists) {
-      return res.status(200).json({
-        status: "avaiable",
-        scoutedBy: null,
-      });
-    }
-
-    const data = buttonDoc.data();
-    return res.status(200).json({
-      status: data.status,
-      scoutedBy: data.scoutedBy,
-    });
-  } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ success: false, error: "Internal Server Error" });
-  }
-};
-
-const toggleMatchButtonStatus = async (req, res) => {
-  try {
-    const { teamNumber, matchNumber } = req.params;
-    const { username } = req.body;
-
-    if (!username) {
-      return res.status(400).json({
-        success: false,
-        error: "Username is required",
-      });
-    }
-
-    const buttonRef = db
-      .collection("buttons")
-      .doc(`${teamNumber}-${matchNumber}`);
-    const buttonDoc = await buttonRef.get();
-    let newStatus;
-
-    if (!buttonDoc.exists) {
-      newStatus = "working";
-      await buttonRef.set({
-        status: newStatus,
-        scoutedBy: username,
-        startTime: new Date().toISOString(),
-      });
-    } else {
-      const data = buttonDoc.data();
-      // Only allow the same user who started scouting to change it back
-      if (data.status === "working" && data.scoutedBy !== username) {
-        return res.status(403).json({
-          success: false,
-          error: "This match is being scouted by someone else",
-        });
-      }
-      newStatus = data.status === "avaiable" ? "working" : "avaiable";
-      await buttonRef.update({
-        status: newStatus,
-        scoutedBy: newStatus === "working" ? username : null,
-        startTime: newStatus === "working" ? new Date().toISOString() : null,
-      });
-    }
-
-    return res.status(200).json({
-      status: newStatus,
-      scoutedBy: newStatus === "working" ? username : null,
-    });
-  } catch (error) {
-    console.error("Error in toggleMatchButtonStatus:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Internal Server Error",
-      details: error.message,
-    });
-  }
-};
-
+/**
+ * Fetches all match scouting data
+ * @param {Object} req - Express request object
+ * @returns {Array<Object>} Array of match scout records
+ * @returns {string} record.teamNumber - Team number
+ * @returns {string} record.matchNumber - Match number
+ * @returns {string} record.username - Scout's username
+ * @returns {Object} record.[...formFields] - All form fields from the match
+ */
 const fetchMatchScoutData = async (req, res) => {
   try {
     const matchScoutCollection = db.collection("matchscout");
@@ -152,7 +85,7 @@ const fetchMatchScoutData = async (req, res) => {
           const matchNumber = matchKey.replace('match', '');
           const username = Object.keys(matchData)[0];
           const scoutData = matchData[username];
-          
+
           matchScoutData.push({
             teamNumber,
             matchNumber,
@@ -174,14 +107,22 @@ const fetchMatchScoutData = async (req, res) => {
     res.status(200).json(matchScoutData);
   } catch (error) {
     console.error("Error fetching match scout data:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: "Internal Server Error",
-      details: error.message 
+      details: error.message
     });
   }
 };
 
+/**
+ * Fetches all pit scouting data
+ * @param {Object} req - Express request object
+ * @returns {Array<Object>} Array of pit scout records
+ * @returns {string} record.teamNumber - Team number
+ * @returns {string} record.username - Scout's username
+ * @returns {Object} record.[...formFields] - All form fields from pit scout
+ */
 const fetchPitScoutData = async (req, res) => {
   try {
     const pitScoutCollection = db.collection("pitscout");
@@ -212,6 +153,13 @@ const fetchPitScoutData = async (req, res) => {
   }
 };
 
+/**
+ * Fetches all scouting instances (both match and pit)
+ * @param {Object} req - Express request object
+ * @returns {Object} Combined scouting data
+ * @returns {Array<Object>} response.pitScoutInstances - All pit scout records
+ * @returns {Array<Object>} response.matchScoutInstances - All match scout records
+ */
 const fetchAllScoutInstances = async (req, res) => {
   try {
     const pitScoutCollection = db.collection("pitscout");
@@ -272,6 +220,14 @@ const fetchAllScoutInstances = async (req, res) => {
   }
 };
 
+/**
+ * Converts match scouting data to CSV format
+ * @param {Object} req - Express request object
+ * @returns {string} CSV formatted string of all match scout data
+ * @returns {Object} error response if conversion fails
+ * @returns {string} error.error - Error message
+ * @returns {string} error.details - Detailed error information
+ */
 const convertMatchScoutToCSV = async (req, res) => {
   try {
     const snapshot = await db.collection("matchscout").get();
@@ -285,7 +241,7 @@ const convertMatchScoutToCSV = async (req, res) => {
       Object.entries(teamData).forEach(([matchKey, matchData]) => {
         if (matchKey.startsWith('match')) {
           const matchNumber = matchKey.replace('match', '');
-          
+
           // Get the first (and only) username key
           const username = Object.keys(matchData)[0];
           const scoutData = matchData[username];
@@ -353,38 +309,14 @@ const convertMatchScoutToCSV = async (req, res) => {
   }
 };
 
-const fetchAllMatchScoutButtonStatuses = async (req, res) => {
-  try {
-    const { matchNumber } = req.params;
-    const buttonStatuses = {};
-
-    const buttonsRef = db.collection("buttons");
-    const snapshot = await buttonsRef
-      .where("matchNumber", "==", matchNumber)
-      .get();
-
-    snapshot.forEach((doc) => {
-      const teamNumber = doc.id.split("-")[0];
-      const data = doc.data();
-      buttonStatuses[teamNumber] = {
-        status: data.status,
-        scoutedBy: data.scoutedBy,
-      };
-    });
-
-    return res.status(200).json({
-      success: true,
-      statuses: buttonStatuses,
-    });
-  } catch (error) {
-    console.error("Error getting match statuses:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Internal Server Error",
-    });
-  }
-};
-
+/**
+ * Converts pit scouting data to CSV format
+ * @param {Object} req - Express request object
+ * @returns {string} CSV formatted string of all pit scout data
+ * @returns {Object} error response if conversion fails
+ * @returns {string} error.error - Error message
+ * @returns {string} error.details - Detailed error information
+ */
 const convertPitScoutToCSV = async (req, res) => {
   try {
     const snapshot = await db.collection("pitscout").get();
@@ -407,7 +339,7 @@ const convertPitScoutToCSV = async (req, res) => {
             robotWeight: scoutData.robotWeight || '',
             frameSize: scoutData.frameSize || '',
             drivetrain: scoutData.drivetrain || '',
-            
+
             // Auto Capabilities
             auto: scoutData.auto || '',
             // Auto Scoring Positions
@@ -418,7 +350,7 @@ const convertPitScoutToCSV = async (req, res) => {
             autoL3: scoutData.scoringPositions?.l3 || false,
             autoL4: scoutData.scoringPositions?.l4 || false,
             autoNotesScored: scoutData.autoNotesScored || '',
-            
+
             // Teleop Scoring Positions
             teleopProcessor: scoutData.scoringPositionsTeleop?.processorTeleop || false,
             teleopNet: scoutData.scoringPositionsTeleop?.netTeleop || false,
@@ -426,15 +358,15 @@ const convertPitScoutToCSV = async (req, res) => {
             teleopL2: scoutData.scoringPositionsTeleop?.l2Teleop || false,
             teleopL3: scoutData.scoringPositionsTeleop?.l3Teleop || false,
             teleopL4: scoutData.scoringPositionsTeleop?.l4Teleop || false,
-            
+
             // Teleop Capabilities
             estimatedCycleTime: scoutData.estimatedCycleTime || '',
             pickupFromFloor: scoutData.pickupFromFloor || '',
-            
+
             // Climb
             climb: scoutData.climb || '',
             climbTime: scoutData.climbTime || '',
-            
+
             // Additional Info
             additionalComments: scoutData.additionalComments || ''
           });
@@ -494,6 +426,19 @@ const convertPitScoutToCSV = async (req, res) => {
   }
 };
 
+/**
+ * Submits a pit scouting form for a specific team
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - URL parameters
+ * @param {string} req.params.teamNumber - Team number to submit for
+ * @param {Object} req.body - Request body containing form data
+ * @param {string} req.body.username - Scout's username
+ * @param {Object} req.body.scoringPositions - Auto scoring position capabilities
+ * @param {Object} req.body.scoringPositionsTeleop - Teleop scoring position capabilities
+ * @returns {Object} Response object
+ * @returns {boolean} response.success - Whether submission was successful
+ * @returns {string?} response.error - Error message if submission failed
+ */
 const submitPitScoutForm = async (req, res) => {
   try {
     const { teamNumber } = req.params;
@@ -547,13 +492,11 @@ const submitPitScoutForm = async (req, res) => {
 };
 
 module.exports = {
-    fetchAllMatchScoutButtonStatuses,
-    submitMatchScoutForm,
-    fetchMatchButtonStatus,
-    toggleMatchButtonStatus,
-    fetchMatchScoutData,
-    fetchPitScoutData,
-    fetchAllScoutInstances,
-    convertMatchScoutToCSV,
-    submitPitScoutForm
+  submitMatchScoutForm,
+  fetchMatchScoutData,
+  fetchPitScoutData,
+  fetchAllScoutInstances,
+  convertMatchScoutToCSV,
+  submitPitScoutForm,
+  convertPitScoutToCSV
 }
