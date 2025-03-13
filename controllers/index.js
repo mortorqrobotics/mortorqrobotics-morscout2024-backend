@@ -9,6 +9,9 @@ const db = require("../firebase");
  * @param {Object} req.body - Request body containing form data
  * @param {string} req.body.username - Scout's username
  * @param {string} req.body.matchNumber - Match number being scouted
+ * @param {string} req.body.brokeDown - Robot reliability status
+ * @param {string} req.body.breakdownDetails - Details about the breakdown
+ * @param {boolean} req.body.completelyBroken - Whether the robot was completely broken
  * @returns {Object} Response object
  * @returns {boolean} response.success - Whether submission was successful
  * @returns {string?} response.error - Error message if submission failed
@@ -16,7 +19,14 @@ const db = require("../firebase");
 const submitMatchScoutForm = async (req, res) => {
   try {
     const { teamNumber } = req.params;
-    const { username, matchNumber, ...formFields } = req.body;
+    const { 
+      username, 
+      matchNumber,
+      brokeDown,
+      breakdownDetails,
+      completelyBroken,
+      ...formData 
+    } = req.body;
 
     // Create PST timestamp
     const pstTimestamp = new Date().toLocaleString("en-US", {
@@ -30,25 +40,27 @@ const submitMatchScoutForm = async (req, res) => {
       hour12: true,
     });
 
-    const teamDocRef = db.collection("matchscout").doc(teamNumber);
-    const teamDoc = await teamDocRef.get();
-
-    // Add timestamp to form data
-    const formDataWithTimestamp = {
-      ...formFields,
+    const matchData = {
+      ...formData,
+      brokeDown,
+      breakdownDetails,
+      completelyBroken,
       submissionTimestamp: pstTimestamp,
     };
+
+    const teamDocRef = db.collection("matchscout").doc(teamNumber);
+    const teamDoc = await teamDocRef.get();
 
     if (teamDoc.exists) {
       await teamDocRef.update({
         [`match${matchNumber}`]: {
-          [username]: formDataWithTimestamp,
+          [username]: matchData,
         },
       });
     } else {
       const initialData = {
         [`match${matchNumber}`]: {
-          [username]: formDataWithTimestamp,
+          [username]: matchData,
         },
       };
       await teamDocRef.set(initialData);
@@ -56,7 +68,7 @@ const submitMatchScoutForm = async (req, res) => {
 
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error(error);
+    console.error("Error submitting match scout form:", error);
     res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 };
@@ -237,21 +249,18 @@ const convertMatchScoutToCSV = async (req, res) => {
       const teamNumber = doc.id;
       const teamData = doc.data();
 
-      // Iterate through match data
       Object.entries(teamData).forEach(([matchKey, matchData]) => {
         if (matchKey.startsWith('match')) {
           const matchNumber = matchKey.replace('match', '');
-
-          // Get the first (and only) username key
           const username = Object.keys(matchData)[0];
           const scoutData = matchData[username];
 
-          // Create record with all fields
           records.push({
             teamNumber,
             matchNumber,
             username,
             submissionTimestamp: scoutData.submissionTimestamp || '',
+            
             // Auto
             autoL1Scores: scoutData.autoL1Scores || 0,
             autoL2Scores: scoutData.autoL2Scores || 0,
@@ -266,6 +275,7 @@ const convertMatchScoutToCSV = async (req, res) => {
             autoNetAlgaeScores: scoutData.autoNetAlgaeScores || 0,
             autoNetAlgaeAttempts: scoutData.autoNetAlgaeAttempts || 0,
             leftStartingZone: scoutData.leftStartingZone || 'No',
+
             // Teleop
             teleopL1Scores: scoutData.teleopL1Scores || 0,
             teleopL2Scores: scoutData.teleopL2Scores || 0,
@@ -279,13 +289,22 @@ const convertMatchScoutToCSV = async (req, res) => {
             teleopProcessorAlgaeAttempts: scoutData.teleopProcessorAlgaeAttempts || 0,
             teleopNetAlgaeScores: scoutData.teleopNetAlgaeScores || 0,
             teleopNetAlgaeAttempts: scoutData.teleopNetAlgaeAttempts || 0,
-            // Endgame
+
+            // Climb
             climbLevel: scoutData.climbLevel || 'None',
             climbSuccess: scoutData.climbSuccess || 'No',
             climbAttemptTime: scoutData.climbAttemptTime || 'None',
-            // Comments
             climbComments: scoutData.climbComments || '',
+
+            // Robot Performance
             robotSpeed: scoutData.robotSpeed || 'None',
+            
+            // Robot Reliability
+            brokeDown: scoutData.brokeDown || 'No',
+            breakdownDetails: scoutData.breakdownDetails || '',
+            completelyBroken: scoutData.completelyBroken || false,
+
+            // General
             generalComments: scoutData.generalComments || ''
           });
         }
@@ -293,12 +312,59 @@ const convertMatchScoutToCSV = async (req, res) => {
     });
 
     if (records.length === 0) {
-      return res.status(404).json({ error: "No scouting data found" });
+      return res.status(404).json({ error: "No match scout data found" });
     }
 
-    const json2csvParser = new Parser();
-    const csv = json2csvParser.parse(records);
+    const json2csvParser = new Parser({
+      fields: [
+        'teamNumber',
+        'matchNumber',
+        'username',
+        'submissionTimestamp',
+        // Auto
+        'autoL1Scores',
+        'autoL2Scores',
+        'autoL3Scores',
+        'autoL4Scores',
+        'autoL1Attempts',
+        'autoL2Attempts',
+        'autoL3Attempts',
+        'autoL4Attempts',
+        'autoProcessorAlgaeScores',
+        'autoProcessorAlgaeAttempts',
+        'autoNetAlgaeScores',
+        'autoNetAlgaeAttempts',
+        'leftStartingZone',
+        // Teleop
+        'teleopL1Scores',
+        'teleopL2Scores',
+        'teleopL3Scores',
+        'teleopL4Scores',
+        'teleopL1Attempts',
+        'teleopL2Attempts',
+        'teleopL3Attempts',
+        'teleopL4Attempts',
+        'teleopProcessorAlgaeScores',
+        'teleopProcessorAlgaeAttempts',
+        'teleopNetAlgaeScores',
+        'teleopNetAlgaeAttempts',
+        // Climb
+        'climbLevel',
+        'climbSuccess',
+        'climbAttemptTime',
+        'climbComments',
+        // Robot Performance
+        'robotSpeed',
+        // Robot Reliability
+        'brokeDown',
+        'breakdownDetails',
+        'completelyBroken',
+        // General
+        'generalComments'
+      ]
+    });
 
+    const csv = json2csvParser.parse(records);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=matchscout_data.csv');
     res.status(200).send(csv);
